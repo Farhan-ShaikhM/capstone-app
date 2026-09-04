@@ -1,76 +1,142 @@
-import { createContext, useContext, useState, useEffect } from "react";
-import api from "../api/axios";
+const User = require("../models/user.js");
+const jwt = require("jsonwebtoken");
 
-const AuthContext = createContext();
+// Helper: build a signed token
+const generateToken = (id) => {
+  return jwt.sign(
+    { id },                                    // payload
+    process.env.JWT_SECRET,                    // secret
+    { expiresIn: process.env.JWT_EXPIRE }      // options
+  );
+};
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+const hasJsonObjectBody = (body) => {
+  return body !== null && typeof body === "object" && !Array.isArray(body);
+};
 
-  // Restore authentication state when app starts
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
-
-    if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
+// @desc    Register a new user
+// @route   POST /api/auth/register
+// @access  Public
+const register = async (req, res, next) => {
+  try {
+    if (!hasJsonObjectBody(req.body)) {
+      return res.status(400).json({
+        success: false,
+        message: "Request body must be a JSON object"
+      });
     }
 
-    setLoading(false);
-  }, []);
+    const { name, email, password, role } = req.body;
 
-  // Login
-  const login = async (email, password) => {
-    const res = await api.post("/auth/login", {
-      email,
-      password,
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({
+        success: false,
+        message: "An account with this email already exists"
+      });
+    }
+
+    // pre('save') hook hashes the password automatically
+    const user = await User.create({ name, email, password, role });
+
+    res.status(201).json({
+      success: true,
+      token: generateToken(user._id),
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+        // password deliberately absent
+      }
     });
+  } catch (error) {
+    console.error("Register error:", error);
+    if (typeof next === "function") {
+      return next(error);
+    }
 
-    localStorage.setItem("token", res.data.token);
-    localStorage.setItem("user", JSON.stringify(res.data.user));
-
-    setUser(res.data.user);
-
-    return res.data;
-  };
-
-  // Register
-  const register = async (name, email, password) => {
-    const res = await api.post("/auth/register", {
-      name,
-      email,
-      password,
+    return res.status(500).json({
+      success: false,
+      message: "Server error while registering user"
     });
+  }
+};
 
-    localStorage.setItem("token", res.data.token);
-    localStorage.setItem("user", JSON.stringify(res.data.user));
+// @desc    Login a user
+// @route   POST /api/auth/login
+// @access  Public
+const login = async (req, res, next) => {
+  try {
+    if (!hasJsonObjectBody(req.body)) {
+      return res.status(400).json({
+        success: false,
+        message: "Request body must be a JSON object"
+      });
+    }
 
-    setUser(res.data.user);
+    const { email, password } = req.body;
 
-    return res.data;
-  };
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide email and password"
+      });
+    }
 
-  // Logout
-  const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    // Must explicitly select the password — it's select: false
+    const user = await User.findOne({ email }).select("+password");
 
-    setUser(null);
-  };
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials"
+      });
+    }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        login,
-        register,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
+    const isMatch = await user.matchPassword(password);
 
-export const useAuth = () => useContext(AuthContext);
+    res.status(200).json({
+      success: true,
+      token: generateToken(user._id),
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    if (typeof next === "function") {
+      return next(error);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error while logging in"
+    });
+  }
+};
+
+// @desc    Get the currently logged-in user
+// @route   GET /api/auth/me
+// @access  Private
+const getMe = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    console.error("GetMe error:", error);
+    if (typeof next === "function") {
+      return next(error);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching user"
+    });
+  }
+};
+
+module.exports = { register, login, getMe };
