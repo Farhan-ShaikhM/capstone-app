@@ -18,6 +18,13 @@ app.use(logger);  // 1. custom middleware
 app.use(corsHandler); // 2. CORS middleware
 app.use(express.json()); // 3. body parsers
 
+app.get("/api/health", (req, res) => {
+    res.status(200).json({
+        status: "ok",
+        time: new Date()
+    });
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/students", studentRoutes); //routes for students
 

@@ -1,19 +1,27 @@
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
 const Dashboard = () => {
-  const user = JSON.parse(localStorage.getItem("user"));
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
 
   return (
     <div>
       <h1>Dashboard</h1>
 
-      {user ? (
-        <div>
-          <h2>Welcome, {user.name}</h2>
-          <p>Email: {user.email}</p>
-          <p>Role: {user.role}</p>
-        </div>
-      ) : (
-        <p>No user logged in</p>
-      )}
+      <h2>Welcome, {user?.name}!</h2>
+
+      <p>Email: {user?.email}</p>
+      <p>Role: {user?.role}</p>
+
+      <button onClick={handleLogout}>
+        Logout
+      </button>
     </div>
   );
 };
