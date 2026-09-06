@@ -1,23 +1,24 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { useState } from "react";
 import api from "../api/axios";
-
-const AuthContext = createContext();
+import { AuthContext } from "./AuthContextValue";
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // Restore user session when the application starts
-  useEffect(() => {
+  const [user, setUser] = useState(() => {
     const token = localStorage.getItem("token");
     const savedUser = localStorage.getItem("user");
 
     if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        return JSON.parse(savedUser);
+      } catch {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
     }
 
-    setLoading(false);
-  }, []);
+    return null;
+  });
+  const loading = false;
 
   // Login function
   const login = async (email, password) => {
@@ -73,5 +74,3 @@ export function AuthProvider({ children }) {
   );
 }
 
-// Custom hook for easier access
-export const useAuth = () => useContext(AuthContext);

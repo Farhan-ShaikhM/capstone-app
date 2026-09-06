@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -12,6 +12,7 @@ const Login = () => {
   });
 
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -25,6 +26,7 @@ const Login = () => {
 
     try {
       setError("");
+      setLoading(true);
       
       await login(
         formData.email,
@@ -36,6 +38,8 @@ const Login = () => {
       setError(
         err.response?.data?.message || "Login failed"
       );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -68,8 +72,8 @@ const Login = () => {
           />
         </div>
 
-        <button type="submit">
-          Login
+        <button type="submit" disabled={loading}>
+          {loading ? "Logging in..." : "Login"}
         </button>
       </form>
 

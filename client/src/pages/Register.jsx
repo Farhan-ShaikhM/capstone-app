@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -13,6 +13,7 @@ const Register = () => {
   });
 
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -26,6 +27,7 @@ const Register = () => {
 
     try {
       setError("");
+      setLoading(true);
 
       await register(
         formData.name,
@@ -38,6 +40,8 @@ const Register = () => {
       setError(
         err.response?.data?.message || "Registration failed"
       );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -81,14 +85,14 @@ const Register = () => {
           />
         </div>
 
-        <button type="submit">
-          Register
+        <button type="submit" disabled={loading}>
+          {loading ? "Registering..." : "Register"}
         </button>
       </form>
 
       <p>
         Already have an account?{" "}
-        <Link to="/">Login</Link>
+        <Link to="/login">Login</Link>
       </p>
     </div>
   );
