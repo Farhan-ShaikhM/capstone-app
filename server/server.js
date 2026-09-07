@@ -6,8 +6,9 @@ const corsHandler = require("./middleware/corsHandler");
 const connectDB = require("./config/db");
 const errorHandler = require("./middleware/errorHandler");
 const notFoundHandler = require("./middleware/notFoundHandler");
-const studentRoutes = require("./routes/studentRoutes");
 const authRoutes = require("./routes/authRoutes");
+const studentRoutes = require("./routes/studentRoutes");
+const taskRoutes = require("./routes/taskRoutes");
 
 const app = express();
 connectDB();    
@@ -26,6 +27,7 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/tasks", taskRoutes);
 app.use("/api/students", studentRoutes); //routes for students
 
 app.use(notFoundHandler); // 5. 404 catch-all

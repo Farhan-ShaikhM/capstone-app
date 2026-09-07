@@ -44,12 +44,12 @@ const Login = () => {
   };
 
   return (
-    <div>
+    <div className="auth-page">
       <h1>Login</h1>
 
-      {error && <p>{error}</p>}
+      {error && <p className="auth-error">{error}</p>}
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} className="auth-form">
         <div>
           <label>Email</label>
           <input
