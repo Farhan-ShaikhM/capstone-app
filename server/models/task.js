@@ -9,6 +9,7 @@ const taskSchema = new mongoose.Schema(
     },
     description: {
       type: String,
+      required: [true, "Description is required"],
       default: "",
       trim: true
     },
@@ -19,11 +20,13 @@ const taskSchema = new mongoose.Schema(
     },
     priority: {
       type: String,
+      required: [true, "Priority is required"],
       enum: ["low", "medium", "high"],
       default: "medium"
     },
     dueDate: {
-      type: Date
+      type: Date,
+      required: [true, "Due date is required"]
     },
     user: {
       type: mongoose.Schema.Types.ObjectId,

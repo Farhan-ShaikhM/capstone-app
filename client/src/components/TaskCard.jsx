@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { validateTask } from "../utils/validate";
 
-export default function TaskCard({ task, onUpdate, onDelete }) {
+export default function TaskCard({ task, onUpdate, onDelete, isBusy }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState({
     title: task.title,
@@ -10,13 +11,25 @@ export default function TaskCard({ task, onUpdate, onDelete }) {
     dueDate: task.dueDate ? task.dueDate.slice(0, 10) : ""
   });
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
 
   const handleChange = (event) => {
-    setDraft({ ...draft, [event.target.name]: event.target.value });
+    const updated = { ...draft, [event.target.name]: event.target.value };
+    setDraft(updated);
+    if (touched[event.target.name]) setErrors(validateTask(updated));
+  };
+
+  const handleBlur = (event) => {
+    setTouched({ ...touched, [event.target.name]: true });
+    setErrors(validateTask(draft));
   };
 
   const handleSave = async () => {
-    if (!draft.title.trim()) return;
+    const foundErrors = validateTask(draft);
+    setErrors(foundErrors);
+    setTouched({ title: true, description: true, dueDate: true });
+    if (Object.keys(foundErrors).length > 0) return;
 
     setSaving(true);
     try {
@@ -35,14 +48,35 @@ export default function TaskCard({ task, onUpdate, onDelete }) {
       priority: task.priority,
       dueDate: task.dueDate ? task.dueDate.slice(0, 10) : ""
     });
+    setErrors({});
+    setTouched({});
     setIsEditing(false);
   };
 
   if (isEditing) {
     return (
       <article className="task-card editing">
-        <input name="title" value={draft.title} onChange={handleChange} aria-label="Task title" />
-        <textarea name="description" value={draft.description} onChange={handleChange} rows="2" aria-label="Task description" />
+        <input
+          name="title"
+          value={draft.title}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          aria-label="Task title"
+          aria-invalid={Boolean(errors.title && touched.title)}
+          className={errors.title && touched.title ? "input-error" : ""}
+        />
+        {errors.title && touched.title && <span className="field-error">{errors.title}</span>}
+        <textarea
+          name="description"
+          value={draft.description}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          rows="2"
+          aria-label="Task description"
+          aria-invalid={Boolean(errors.description && touched.description)}
+          className={errors.description && touched.description ? "input-error" : ""}
+        />
+        {errors.description && touched.description && <span className="field-error">{errors.description}</span>}
         <div className="form-row">
           <select name="status" value={draft.status} onChange={handleChange} aria-label="Task status">
             <option value="pending">Pending</option>
@@ -83,8 +117,10 @@ export default function TaskCard({ task, onUpdate, onDelete }) {
         {formattedDate && <span className="due">Due {formattedDate}</span>}
       </div>
       <div className="card-actions">
-        <button onClick={() => setIsEditing(true)} className="btn-ghost">Edit</button>
-        <button onClick={() => onDelete(task._id)} className="btn-danger">Delete</button>
+        <button onClick={() => setIsEditing(true)} className="btn-ghost" disabled={isBusy}>Edit</button>
+        <button onClick={() => onDelete(task._id)} className="btn-danger" disabled={isBusy}>
+          {isBusy ? "Deleting..." : "Delete"}
+        </button>
       </div>
     </article>
   );

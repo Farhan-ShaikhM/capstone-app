@@ -1,12 +1,71 @@
 const Task = require("../models/task");
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const getTasks = async (req, res, next) => {
   try {
-    const tasks = await Task.find({ user: req.user.id }).sort({ createdAt: -1 });
+    const { search = "", status = "all", sort = "newest" } = req.query;
+    const filter = { user: req.user.id };
+    const sortOption = ["newest", "oldest", "priority", "title"].includes(sort)
+      ? sort
+      : "newest";
+
+    if (["pending", "in-progress", "done"].includes(status)) {
+      filter.status = status;
+    }
+
+    if (typeof search === "string" && search.trim()) {
+      const searchRegex = new RegExp(escapeRegex(search.trim()), "i");
+      filter.$or = [
+        { title: searchRegex },
+        { description: searchRegex }
+      ];
+    }
+
+    const totalCountQuery = Task.countDocuments({ user: req.user.id });
+    const filteredCountQuery = Task.countDocuments(filter);
+    let tasksQuery;
+
+    if (sortOption === "priority") {
+      tasksQuery = Task.aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            priorityRank: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$priority", "high"] }, then: 0 },
+                  { case: { $eq: ["$priority", "medium"] }, then: 1 },
+                  { case: { $eq: ["$priority", "low"] }, then: 2 }
+                ],
+                default: 3
+              }
+            }
+          }
+        },
+        { $sort: { priorityRank: 1, createdAt: -1 } },
+        { $project: { priorityRank: 0 } }
+      ]);
+    } else {
+      const sortBy = {
+        newest: { createdAt: -1 },
+        oldest: { createdAt: 1 },
+        title: { title: 1, createdAt: -1 }
+      }[sortOption];
+
+      tasksQuery = Task.find(filter).sort(sortBy);
+    }
+
+    const [tasks, totalCount, filteredCount] = await Promise.all([
+      tasksQuery,
+      totalCountQuery,
+      filteredCountQuery
+    ]);
 
     res.status(200).json({
       success: true,
-      count: tasks.length,
+      count: filteredCount,
+      totalCount,
       data: tasks
     });
   } catch (error) {

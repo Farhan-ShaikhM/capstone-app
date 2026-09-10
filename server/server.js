@@ -7,7 +7,6 @@ const connectDB = require("./config/db");
 const errorHandler = require("./middleware/errorHandler");
 const notFoundHandler = require("./middleware/notFoundHandler");
 const authRoutes = require("./routes/authRoutes");
-const studentRoutes = require("./routes/studentRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 
 const app = express();
@@ -28,7 +27,6 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/tasks", taskRoutes);
-app.use("/api/students", studentRoutes); //routes for students
 
 app.use(notFoundHandler); // 5. 404 catch-all
 app.use(errorHandler); // 6. error handler (4 args, always last)

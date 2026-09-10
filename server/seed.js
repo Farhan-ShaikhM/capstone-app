@@ -1,6 +1,5 @@
 require("dotenv").config();
 const connectDB = require("./config/db");
-const Student = require("./models/student");
 
 const seedData = [
   { name: "Pranit Supe", email: "pranit@college.edu", branch: "CSE", marks: 88, subjects: ["DSA", "DBMS"] },
@@ -12,8 +11,8 @@ const seedData = [
 const importData = async () => {
   try {
     await connectDB();
-    await Student.deleteMany();        // clear existing records
-    await Student.insertMany(seedData);
+    // await Student.deleteMany();        // clear existing records
+    // await Student.insertMany(seedData);
     console.log("✅ Data imported successfully");
     process.exit(0);
   } catch (error) {

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import { useAuth } from "../context/useAuth";
 import TaskForm from "../components/TaskForm";
 import TaskList from "../components/TaskList";
 import FilterBar from "../components/FilterBar";
+import TaskSkeleton from "../components/TaskSkeleton";
+import { useToast } from "../context/useToast";
 
 const defaultFilters = {
   search: "",
@@ -16,16 +18,26 @@ const Dashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busyIds, setBusyIds] = useState([]);
   const [filters, setFilters] = useState(defaultFilters);
+  const [totalCount, setTotalCount] = useState(0);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const toast = useToast();
 
   const fetchTasks = async () => {
     try {
       setLoading(true);
       setError("");
-      const response = await api.get("/tasks");
+      const response = await api.get("/tasks", {
+        params: {
+          search: filters.search.trim() || undefined,
+          status: filters.status === "all" ? undefined : filters.status,
+          sort: filters.sort
+        }
+      });
       setTasks(response.data.data);
+      setTotalCount(response.data.totalCount ?? response.data.count);
     } catch (err) {
       setError(err.response?.data?.message || "Could not load your tasks");
     } finally {
@@ -34,17 +46,28 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
     let active = true;
 
-    const loadTasks = async () => {
+    const timeoutId = setTimeout(async () => {
+      setLoading(true);
       try {
-        const response = await api.get("/tasks");
+        const response = await api.get("/tasks", {
+          params: {
+            search: filters.search.trim() || undefined,
+            status: filters.status === "all" ? undefined : filters.status,
+            sort: filters.sort
+          },
+          signal: controller.signal
+        });
+
         if (active) {
           setTasks(response.data.data);
+          setTotalCount(response.data.totalCount ?? response.data.count);
           setError("");
         }
       } catch (err) {
-        if (active) {
+        if (active && err.code !== "ERR_CANCELED") {
           setError(err.response?.data?.message || "Could not load your tasks");
         }
       } finally {
@@ -52,28 +75,27 @@ const Dashboard = () => {
           setLoading(false);
         }
       }
-    };
-
-    loadTasks();
+    }, 300);
 
     return () => {
       active = false;
+      clearTimeout(timeoutId);
+      controller.abort();
     };
-  }, []);
+  }, [filters]);
 
-  const handleTaskCreated = (newTask) => {
-    setTasks((previousTasks) => [newTask, ...previousTasks]);
+  const handleTaskCreated = async () => {
+    await fetchTasks();
   };
 
   const handleUpdate = async (id, updates) => {
     try {
       setError("");
-      const response = await api.put(`/tasks/${id}`, updates);
-      setTasks((previousTasks) => previousTasks.map((task) => (
-        task._id === id ? response.data.data : task
-      )));
+      await api.put(`/tasks/${id}`, updates);
+      await fetchTasks();
+      toast.success("Task updated");
     } catch (err) {
-      setError(err.response?.data?.message || "Could not update the task");
+      toast.error(err.response?.data?.message || "Could not update the task");
       return false;
     }
 
@@ -84,45 +106,16 @@ const Dashboard = () => {
     if (!window.confirm("Delete this task? This cannot be undone.")) return;
 
     try {
-      setError("");
+      setBusyIds((previousIds) => [...previousIds, id]);
       await api.delete(`/tasks/${id}`);
-      setTasks((previousTasks) => previousTasks.filter((task) => task._id !== id));
+      await fetchTasks();
+      toast.success("Task deleted");
     } catch (err) {
-      setError(err.response?.data?.message || "Could not delete the task");
+      toast.error(err.response?.data?.message || "Could not delete the task");
+    } finally {
+      setBusyIds((previousIds) => previousIds.filter((busyId) => busyId !== id));
     }
   };
-
-  const visibleTasks = useMemo(() => {
-    let result = [...tasks];
-
-    if (filters.search.trim()) {
-      const query = filters.search.toLowerCase();
-      result = result.filter((task) => (
-        task.title.toLowerCase().includes(query) ||
-        (task.description || "").toLowerCase().includes(query)
-      ));
-    }
-
-    if (filters.status !== "all") {
-      result = result.filter((task) => task.status === filters.status);
-    }
-
-    const priorityOrder = { high: 0, medium: 1, low: 2 };
-    result.sort((first, second) => {
-      if (filters.sort === "oldest") {
-        return new Date(first.createdAt) - new Date(second.createdAt);
-      }
-      if (filters.sort === "priority") {
-        return priorityOrder[first.priority] - priorityOrder[second.priority];
-      }
-      if (filters.sort === "title") {
-        return first.title.localeCompare(second.title);
-      }
-      return new Date(second.createdAt) - new Date(first.createdAt);
-    });
-
-    return result;
-  }, [tasks, filters]);
 
   const handleLogout = () => {
     logout();
@@ -141,7 +134,13 @@ const Dashboard = () => {
 
       <TaskForm onTaskCreated={handleTaskCreated} />
 
-      {loading && <div className="loader">Loading your tasks...</div>}
+      {loading && (
+        <div aria-label="Loading tasks">
+          <TaskSkeleton />
+          <TaskSkeleton />
+          <TaskSkeleton />
+        </div>
+      )}
 
       {error && (
         <div className="alert-error">
@@ -150,27 +149,28 @@ const Dashboard = () => {
         </div>
       )}
 
-      {!loading && !error && tasks.length === 0 && (
+      {!loading && !error && totalCount === 0 && (
         <div className="empty-state">
           <h2>No tasks yet</h2>
           <p>Add your first task above to get started.</p>
         </div>
       )}
 
-      {!loading && !error && tasks.length > 0 && (
+      {!loading && !error && totalCount > 0 && (
         <>
           <FilterBar
             filters={filters}
             onChange={setFilters}
-            resultCount={visibleTasks.length}
-            totalCount={tasks.length}
+            resultCount={tasks.length}
+            totalCount={totalCount}
           />
 
-          {visibleTasks.length > 0 ? (
+          {tasks.length > 0 ? (
             <TaskList
-              tasks={visibleTasks}
+              tasks={tasks}
               onUpdate={handleUpdate}
               onDelete={handleDelete}
+              busyIds={busyIds}
             />
           ) : (
             <div className="empty-state filter-empty">
